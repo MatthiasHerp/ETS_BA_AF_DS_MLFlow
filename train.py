@@ -228,7 +228,7 @@ def fit_extracter(params, y, exog):
     # Note: added len(exog) as now we have variable number of exog variables due to days before and after
     #      before: params[13:18] as we have 5 types of events
     
-     yearly = pd.DataFrame({'date': y.index})
+    yearly = pd.DataFrame({'date': y.index})
     yearly = yearly.set_index(pd.PeriodIndex(y.index, freq='D'))
 
     #yearly seasonality with N=10
@@ -334,7 +334,7 @@ def ETS_M_Ad_M_forecast(alpha, beta, gamma, omega,
     # computation loop:
     for i in range(1, h + 1):
         # compute one step ahead  forecast for timepoint t
-       mu = (l_past + omega * b_past) * s_past * yearly_past[0][0] + np.dot(reg,exog.iloc[i-2]) * (l_past + omega * b_past) * s_past
+        mu = (l_past + omega * b_past) * s_past * yearly_past[0][0] + np.dot(reg,exog.iloc[i-2]) * (l_past + omega * b_past) * s_past
         
         #Important Note: We need  the i-2 in: np.dot(reg,exog.iloc[i-2])
         #                Because the exog_to_test contains the first future value at zero
