@@ -1,0 +1,15 @@
+name: tutorials
+channels:
+  - defaults
+  - anaconda
+  - conda-forge
+dependencies: 
+  - numpy>=1.14.3
+  - pandas>=0.22.0
+  - scikit-learn>=0.19.1
+  - matplotlib>=3.0.2
+  - pip
+  - pip:
+    - mlflow>=1.0
+    - scipy
+    - cloudpickle
