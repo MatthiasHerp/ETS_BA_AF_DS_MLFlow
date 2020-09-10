@@ -154,13 +154,28 @@ def seasonal_matrices():
     weekly_transition_matrix = np.vstack((matrix_6, row_7))
 
     weekly_update_vector = np.vstack(np.concatenate((np.zeros(6), 1), axis=None))
-
-    return weekly_transition_matrix, weekly_update_vector
+    
+    #defining yearly transition matrix:
+    #1. defining first column of zeros (1 row to short)
+    col_1 = np.vstack(np.zeros(364))
+    #2. defining identity matrix 1 row and column to small
+    col_2_365 = np.identity(364)
+    #3. adding the 1 column and the identity matrix, now all states are updated to jump up one step in the state vector
+    matrix_364 = np.hstack((col_1,col_2_365))
+    #4. creating a final row in which the current state is put in last place and will be added by an update
+    row_365 = np.concatenate((1,np.zeros(364)), axis = None)
+    #5. adding the last row to the matrix to make it complete
+    yearly_transition_matrix = np.vstack((matrix_364,row_365))
+    
+    #defining the yearly updating vector
+    yearly_update_vector = np.vstack(np.concatenate((np.zeros(364),1), axis = None)) 
+    
+    return yearly_transition_matrix, weekly_transition_matrix, yearly_update_vector, weekly_update_vector
 
 
 # Defining the fit calculator of the model comnbining the above sub functions and being called by model
 def ETS_M_Ad_M(alpha, beta, gamma, omega,
-               l_init_HM, b_init_HM, s_init_HM, reg, y, exog):
+               l_init_HM, b_init_HM, s_init_HM, yearly_init,epsilon, reg, y, exog):
     t = len(y)
     errors_list = list()
     point_forecast = list()
@@ -174,7 +189,7 @@ def ETS_M_Ad_M(alpha, beta, gamma, omega,
     s_past = s_init_HM
 
     # defining the seasonal matrices for the calculation of new state estimates
-    weekly_transition_matrix, weekly_update_vector = seasonal_matrices()
+    yearly_transition_matrix, weekly_transition_matrix, yearly_update_vector, weekly_update_vector = seasonal_matrices()
 
     # computation loop:
     for i in range(0, t):
@@ -212,9 +227,63 @@ def fit_extracter(params, y, exog):
 
     # Note: added len(exog) as now we have variable number of exog variables due to days before and after
     #      before: params[13:18] as we have 5 types of events
+    
+     yearly = pd.DataFrame({'date': y.index})
+    yearly = yearly.set_index(pd.PeriodIndex(y.index, freq='D'))
+
+    #yearly seasonality with N=10
+    #N=1
+    yearly['yearly_sin365'] = np.sin(2 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365'] = np.cos(2 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=2
+    yearly['yearly_sin365_2'] = np.sin(4 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_2'] = np.cos(4 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=3
+    yearly['yearly_sin365_3'] = np.sin(6 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_3'] = np.cos(6 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=4
+    yearly['yearly_sin365_4'] = np.sin(8 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_4'] = np.cos(8 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=5
+    yearly['yearly_sin365_5'] = np.sin(10 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_5'] = np.cos(10 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=6
+    yearly['yearly_sin365_6'] = np.sin(12 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_6'] = np.cos(12 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=7
+    yearly['yearly_sin365_7'] = np.sin(14 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_7'] = np.cos(14 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=8
+    yearly['yearly_sin365_8'] = np.sin(16 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_8'] = np.cos(16 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=9
+    yearly['yearly_sin365_9'] = np.sin(18 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_9'] = np.cos(18 * np.pi * yearly.index.dayofyear / 365.25)
+    #N=10
+    yearly['yearly_sin365_10'] = np.sin(20 * np.pi * yearly.index.dayofyear / 365.25)
+    yearly['yearly_cos365_10'] = np.cos(20 * np.pi * yearly.index.dayofyear / 365.25)
+
+    #deleting date column as it is no longer required and should not be in the linear regression
+    del yearly['date']
+    
+    #defining the initial yearly seasonal components
+    #Trick to lower the number of parameters to estimate:
+    #   I dont estimate 365 dummies but rather 20 furier series weights and cumpute the dummies with them
+    
+    #1. compute the fourier series results from the weights times the cos(t) and sin(t) for t=0...365
+    yearly_init = params[13 + len(exogen.columns):13 + len(exogen.columns) + 20] * yearly.iloc[0:365,:-7]
+    #2. sum up the total yearly seasonality of each day by summing up all weighted trigonometric functional values
+    yearly_init = 1 + yearly_init.sum(axis=1)
+    #3. define this array of 365 dummies as an array
+    yearly_init = np.vstack(yearly_init)
+    #4. turn the array around as we want the most recent seasonality effect to be at the end
+    yearly_init = yearly_init[::-1]
+    
+    #yearly smoothing parameter
+    epsilon = params[13 + len(exogen.columns) + 20]
 
     results = ETS_M_Ad_M(alpha, beta, gamma, omega,
-                         l_init_HM, b_init_HM, s_init_HM, reg, y, exog)
+                         l_init_HM, b_init_HM, s_init_HM,  yearly_init, epsilon, reg, y, exog)
 
     return results
 
@@ -229,12 +298,16 @@ def forecasting(params, exog, h):
     b_init_HM = params[5]
     s_init_HM = np.vstack(params[6:13])
     reg = (params[13:13 + len(exogen.columns)])
+    
+    epsilon = params[13 + len(exogen.columns)]
+    
+    yearly= params[13 + len(exogen.columns) + 1:13 + len(exogen.columns) + 365]
 
     # Note: added len(exog) as now we have variable number of exog variables due to days before and after
     #      before: params[13:18] as we have 5 types of events
 
     results = ETS_M_Ad_M_forecast(alpha, beta, gamma, omega,
-                                  l_init_HM, b_init_HM, s_init_HM, reg, h, exog)
+                                  l_init_HM, b_init_HM, s_init_HM, yearly, reg, h, exog)
 
     return results
 
@@ -248,6 +321,7 @@ def ETS_M_Ad_M_forecast(alpha, beta, gamma, omega,
     l_list = list()
     b_list = list()
     s_list = list()
+    yearly_list = list()
 
     # Initilaisation
     l_past = l_init_HM
@@ -255,20 +329,25 @@ def ETS_M_Ad_M_forecast(alpha, beta, gamma, omega,
     s_past = s_init_HM
 
     # defining the seasonal matrices for the calculation of new state estimates
-    weekly_transition_matrix, weekly_update_vector = seasonal_matrices()
+    yearly_transition_matrix, weekly_transition_matrix, yearly_update_vector, weekly_update_vector = seasonal_matrices()
 
     # computation loop:
     for i in range(1, h + 1):
         # compute one step ahead  forecast for timepoint t
-        mu = (l_past + omega * b_past) * s_past[0] + np.dot(reg, exog.iloc[i - 1]) * (l_past + omega * b_past) * s_past[
-            0]
-
+       mu = (l_past + omega * b_past) * s_past * yearly_past[0][0] + np.dot(reg,exog.iloc[i-2]) * (l_past + omega * b_past) * s_past
+        
+        #Important Note: We need  the i-2 in: np.dot(reg,exog.iloc[i-2])
+        #                Because the exog_to_test contains the first future value at zero
+        
         point_forecast.append(mu)
         l_list.append(l_past)
         b_list.append(b_past)
-        s_list.append(s_past[0])
+        s_list.append(s_past)
+        yearly_list.append(yearly_past[0][0])
 
         s_past = np.dot(weekly_transition_matrix, s_past)
+        
+        yearly = np.dot(yearly_transition_matrix,yearly_past)
 
     return {'point forecast': point_forecast,
             'l_list': l_list, 'b_list': b_list, 's_list': s_list}
@@ -315,7 +394,7 @@ if __name__ == "__main__":
                 5.55499458e+03,  3.96440052e+01,  1.14589164e+00,  1.18053933e+00,
                 8.78903981e-01,  7.82677252e-01,  7.54118200e-01,  7.76617802e-01,
                 9.27728973e-01,  1.28533624e-01, -5.34822743e-02, -1.50822221e-01,
-                1.44746722e-02,  1.25113251e-02, np.zeros(len(exogen.columns)-5)]
+                1.44746722e-02,  1.25113251e-02, np.zeros(len(exogen.columns)-5 + 20)] #20 fourier series
         
         Starting_Parameters_optimal = np.concatenate(Starting_Parameters_optimal,axis=None)
   
@@ -332,7 +411,7 @@ if __name__ == "__main__":
         
         #adding bounds for the increased number of exogen
         #adding one bound for each additional day before and after
-        for i in range(0,sum(before)+sum(after)):
+        for i in range(0,sum(before)+sum(after) + 20): #20 fourier series
             bounds.append((-1,np.inf))
         
         #Saving Parameters
@@ -350,8 +429,14 @@ if __name__ == "__main__":
         mlflow.log_param("Starting_Parameters_optimal", Starting_Parameters_optimal)
 
         #running the model optimization
-        res = minimize(model, Starting_Parameters_optimal, args=(np.array(y['revenue']), exog_to_train), 
+        try:
+            res = minimize(model, Starting_Parameters_optimal, args=(np.array(y['revenue']), exog_to_train), 
                        method='L-BFGS-B', bounds = bounds)
+       
+        except: 
+            # save stack trace
+            stack_trace = traceback.format_exc()
+            mlflow.log_param("stack trace_res", stack_trace)
         
         #logging in optimal parameters
         mlflow.log_param("Model_Parameters_optimal", res.x)
